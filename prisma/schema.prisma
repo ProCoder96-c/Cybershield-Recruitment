@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Auth (better-auth)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Recruitment page content
+// ---------------------------------------------------------------------------
+
+// One settings row (fixed id, see src/lib/defaults.ts)
+model Recruitment {
+  id           String   @id
+  eyebrow      String   // small label above the heading
+  heading      String
+  intro        String
+  isOpen       Boolean  @default(true) // master switch for applications
+  deadline     String?  // free text, e.g. "31 March 2027"
+  applyLabel   String
+  closedNotice String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("recruitment")
+}
+
+model RecruitmentRole {
+  id           String   @id @default(cuid())
+  key          String   @unique // stable slug used by applications
+  title        String
+  team         String?
+  description  String
+  requirements String[]
+  isOpen       Boolean  @default(true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([order])
+  @@map("recruitment_role")
+}
+
+model TeamMember {
+  id          String   @id @default(cuid())
+  name        String
+  position    String
+  group       String?  // section heading, e.g. "Core Team"
+  bio         String?
+  imageUrl    String?
+  linkedinUrl String?
+  githubUrl   String?
+  order       Int      @default(0)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+  @@map("team_member")
+}
+
+// ---------------------------------------------------------------------------
+// Applications submitted from the public form
+// ---------------------------------------------------------------------------
+
+enum ApplicationStatus {
+  NEW
+  SHORTLISTED
+  SELECTED
+  REJECTED
+}
+
+model Application {
+  id         String            @id @default(cuid())
+
+  // Role snapshot (no FK on purpose: applications survive role edits/deletes)
+  roleKey    String
+  roleTitle  String
+
+  name       String
+  department String
+  rollNo     String            // trimmed + upper-cased
+  email      String?
+  reason     String
+  experience String
+
+  status     ApplicationStatus @default(NEW)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([roleKey, rollNo]) // one application per person per role
+  @@index([roleKey])
+  @@index([createdAt])
+  @@map("application")
+}
